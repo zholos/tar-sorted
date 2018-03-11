@@ -67,18 +67,19 @@ class Tree:
 
     def scan(self, path):
         st = os.lstat(path)
-        if stat.S_ISREG(st.st_mode):
-            dirname, basename = os.path.split(path)
-            ext = os.path.splitext(basename)[1].lower()
-            md5 = read_md5(path)
-            self.files.setdefault(md5, []).append(
-                (dirname, basename, ext, md5, path))
-        elif stat.S_ISDIR(st.st_mode):
+        if stat.S_ISDIR(st.st_mode):
             self.emit(os.path.join(path, ""), True, ())
             for item in os.listdir(path):
                 self.scan(os.path.join(path, item))
         else:
-            raise Exception("unsupported file type: %s" % path)
+            dirname, basename = os.path.split(path)
+            ext = os.path.splitext(basename)[1].lower()
+            if stat.S_ISREG(st.st_mode):
+                md5 = read_md5(path)
+            else:
+                md5 = 0
+            self.files.setdefault(md5, []).append(
+                (dirname, basename, ext, md5, path))
 
     def process(self):
         def sort_key(x):
@@ -138,3 +139,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
