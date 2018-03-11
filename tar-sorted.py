@@ -25,7 +25,7 @@ class Tree:
         else:
             self.tar = None
 
-    def emit(self, path, isdir, link_candidates):
+    def emit(self, path, link_candidates):
         if self.tar:
             info = self.tar.gettarinfo(path)
             if info.islnk():
@@ -35,18 +35,16 @@ class Tree:
                 # Undo link and check data instead.
                 info.type = tarfile.REGTYPE
                 info.linkname = ""
-            if not (info.isdir() if isdir else info.isreg()):
-                raise Exception("tar info doesn't match scan")
             info.mode = 0o755 if info.isdir() else 0o644
             info.uid = info.gid = 0
             info.uname = "root"
             info.gname = "wheel"
-            if not isdir and info.size:
+            if info.isreg() and info.size:
                 for link in link_candidates:
                     link_info = self.tar.gettarinfo(link)
                     # Hardlink mtime can be saved, but can't be extracted with
                     # command-line tool, so only link when mtime is the same
-                    if link_info.mtime == info.mtime:
+                    if link_info.isreg() and link_info.mtime == info.mtime:
                         if filecmp.cmp(path, link, shallow=False):
                             info.type = tarfile.LNKTYPE
                             info.linkname = link
@@ -68,7 +66,7 @@ class Tree:
     def scan(self, path):
         st = os.lstat(path)
         if stat.S_ISDIR(st.st_mode):
-            self.emit(os.path.join(path, ""), True, ())
+            self.emit(os.path.join(path, ""), ())
             for item in os.listdir(path):
                 self.scan(os.path.join(path, item))
         else:
@@ -77,7 +75,7 @@ class Tree:
             if stat.S_ISREG(st.st_mode):
                 md5 = read_md5(path)
             else:
-                md5 = 0
+                md5 = None
             self.files.setdefault(md5, []).append(
                 (dirname, basename, ext, md5, path))
 
@@ -95,7 +93,7 @@ class Tree:
                 link_candidates = []
                 for path in sorted(
                         (path for _, _, _, _, path in self.files[md5])):
-                    self.emit(path, False, link_candidates)
+                    self.emit(path, link_candidates)
                     if self.mode == "tar_links":
                         link_candidates.append(path)
 
@@ -139,4 +137,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
